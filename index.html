@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Тёплые места Якутска | Карта где погреться зимой</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #fff5e6 0%, #ffe0b5 100%);
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #e67e22, #d35400);
+            color: white;
+            padding: 15px 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .header h1 { font-size: 1.5rem; margin-bottom: 5px; }
+        .header p { font-size: 0.85rem; opacity: 0.9; }
+        .container { max-width: 1300px; margin: 0 auto; padding: 15px; }
+        .info-banner {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 12px 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .info-banner span {
+            background: #e67e22;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        .filters {
+            background: white;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        .filter-btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+        .filter-btn.active {
+            background: #e67e22;
+            color: white;
+            box-shadow: 0 2px 8px rgba(230,126,34,0.4);
+        }
+        .filter-btn:hover:not(.active) { background: #bdc3c7; }
+        #map {
+            height: 450px;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            z-index: 1;
+        }
+        .places-section {
+            background: white;
+            border-radius: 16px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .places-section h3 { color: #e67e22; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .places-list {
+            max-height: 300px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .place-item {
+            background: #f9f9f9;
+            padding: 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 4px solid #e67e22;
+        }
+        .place-item:hover { background: #ffe0b5; transform: translateX(5px); }
+        .place-name { font-weight: bold; font-size: 1rem; color: #2c3e50; }
+        .place-address { font-size: 0.8rem; color: #7f8c8d; margin: 4px 0; }
+        .place-hours { font-size: 0.75rem; color: #27ae60; }
+        .place-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        .type-cafe { background: #27ae60; color: white; }
+        .type-mall { background: #2980b9; color: white; }
+        .type-bus { background: #e67e22; color: white; }
+        .type-gov { background: #8e44ad; color: white; }
+        .footer { text-align: center; padding: 15px; font-size: 0.75rem; color: #7f8c8d; }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #e67e22;
+            font-weight: bold;
+        }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.2rem; }
+            .filter-btn { padding: 6px 12px; font-size: 0.8rem; }
+            #map { height: 350px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🔥 Карта тёплых мест — Якутск</h1>
+    <p>❄️ Зимой до -50°C? Знай, где согреться!</p>
+</div>
+
+<div class="container">
+    <div class="info-banner">
+        📌 <strong>Как пользоваться:</strong> Нажмите на маркер на карте или на место в списке — увидите адрес и часы работы. 
+        <span>🚶 Бесплатный вход в ТЦ, госучреждения, тёплые остановки</span>
+    </div>
+
+    <div class="filters" id="filters">
+        <button class="filter-btn active" data-type="all">📍 Все места</button>
+        <button class="filter-btn" data-type="cafe">☕ Кафе</button>
+        <button class="filter-btn" data-type="mall">🏬 ТЦ / Торговые центры</button>
+        <button class="filter-btn" data-type="bus">🚏 Тёплые остановки</button>
+        <button class="filter-btn" data-type="gov">🏛️ Госучреждения / Библиотеки</button>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="places-section">
+        <h3>📋 Список тёплых мест (нажми для перехода)</h3>
+        <div class="places-list" id="places-list">
+            <div class="loading">🌍 Загрузка карты и поиск точных координат мест...</div>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    🧭 Координаты получаются автоматически через OpenStreetMap Nominatim | Якутск, 2026
+</div>
+
+<script>
+    // ============================================
+    // АДРЕСА МЕСТ (без координат — они будут найдены автоматически)
+    // ============================================
+    const placesData = [
+        { name: "ТРЦ «Туймаада»", address: "ул. Орджоникидзе, 38, Якутск", type: "mall", hours: "10:00–21:00", note: "Крупный ТЦ в центре, тёплый вход" },
+        { name: "ТРЦ «Palladium»", address: "ул. Лермонтова, 66, Якутск", type: "mall", hours: "10:00–20:00", note: "Тёплый холл, фудкорт" },
+        { name: "ТЦ «Айсберг»", address: "ул. Лермонтова, 62/4, Якутск", type: "mall", hours: "10:00–20:00", note: "Тёплый вход, зона отдыха" },
+        { name: "ТЦ «Проспект»", address: "ул. Курашова, 6, Якутск", type: "mall", hours: "10:00–20:00", note: "В центре города" },
+        { name: "ТРЦ «Ураса Молл»", address: "Автострада 50 лет Октября, 6/2, Якутск", type: "mall", hours: "10:00–21:00", note: "Современный ТРЦ" },
+        { name: "Кафе «Тарыт»", address: "ул. Орджоникидзе, 20, Якутск", type: "cafe", hours: "09:00–22:00", note: "Можно зайти погреться без заказа" },
+        { name: "Кафе «Севара»", address: "ул. Фёдора Попова, 8/1, Якутск", type: "cafe", hours: "10:00–20:00", note: "В ТК Хоттей" },
+        { name: "Кофейня «Aurora»", address: "ул. Дзержинского, 52/2, Якутск", type: "cafe", hours: "08:00–21:00", note: "Уютная кофейня" },
+        { name: "Кафе «Бон Аппетит»", address: "ул. Аммосова, 8, Якутск", type: "cafe", hours: "09:00–21:00", note: "Рядом с МФЦ" },
+        { name: "Остановка «Площадь Ленина»", address: "площадь Ленина, Якутск", type: "bus", hours: "Круглосуточно", note: "Закрытый тёплый павильон" },
+        { name: "Остановка «Дом печати»", address: "ул. Орджоникидзе, Якутск (перекресток с ул. Дзержинского)", type: "bus", hours: "Круглосуточно", note: "Тёплый павильон" },
+        { name: "Остановка «Автовокзал»", address: "ул. Автовокзальная, Якутск", type: "bus", hours: "05:00–01:00", note: "Тёплый зал ожидания" },
+        { name: "Остановка «ТЦ Мега»", address: "Автострада 50 лет Октября, 1, Якутск", type: "bus", hours: "Круглосуточно", note: "Тёплый павильон" },
+        { name: "Национальная библиотека РС(Я)", address: "пр. Ленина, 40, Якутск", type: "gov", hours: "10:00–19:00 (пн-сб)", note: "Вход свободный, тепло" },
+        { name: "МФЦ (Октябрьский округ)", address: "ул. Крупской, 11, Якутск", type: "gov", hours: "09:00–20:00", note: "Тёплая зона ожидания" },
+        { name: "Дворец детства", address: "ул. Каландаришвили, 11, Якутск", type: "gov", hours: "09:00–18:00", note: "Вход свободный" },
+        { name: "Государственный цирк Якутии", address: "пр. Ленина, 32, Якутск", type: "gov", hours: "В дни представлений", note: "Тёплое фойе" }
+    ];
+
+    let places = [];      // здесь будут места с координатами
+    let markers = [];
+    let map;
+
+    // Инициализация карты (пока пустая)
+    function initMap() {
+        map = L.map('map').setView([62.0281, 129.7325], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+            maxZoom: 18
+        }).addTo(map);
+    }
+
+    // Иконки для маркеров
+    function getIcon(type) {
+        const colors = { cafe: '#27ae60', mall: '#2980b9', bus: '#e67e22', gov: '#8e44ad' };
+        const color = colors[type] || '#95a5a6';
+        return L.divIcon({
+            html: `<div style="background:${color}; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 2px 5px rgba(0,0,0,0.3);">
+                    <span style="color:white; font-size:13px; font-weight:bold;">🔥</span>
+                   </div>`,
+            iconSize: [28, 28],
+            className: 'custom-marker'
+        });
+    }
+
+    // Добавление маркера на карту
+    function addMarker(place) {
+        const icon = getIcon(place.type);
+        const marker = L.marker([place.lat, place.lng], { icon: icon }).addTo(map);
+        
+        const typeName = { cafe: '☕ Кафе', mall: '🏬 ТЦ', bus: '🚏 Остановка', gov: '🏛️ Госучреждение' }[place.type];
+        
+        marker.bindPopup(`
+            <div style="min-width:200px; padding:5px;">
+                <strong style="font-size:1.1rem; color:#e67e22;">🔥 ${place.name}</strong><br/>
+                <span style="color:#2980b9;">${typeName}</span><br/>
+                📍 ${place.address}<br/>
+                🕒 ${place.hours}<br/>
+                ℹ️ ${place.note}
+            </div>
+        `);
+        
+        markers.push({ marker, place });
+        return marker;
+    }
+
+    function clearMarkers() {
+        markers.forEach(item => map.removeLayer(item.marker));
+        markers = [];
+    }
+
+    function showMarkersByType(type) {
+        clearMarkers();
+        const filtered = type === 'all' ? places : places.filter(p => p.type === type);
+        filtered.forEach(place => addMarker(place));
+        return filtered;
+    }
+
+    function buildList(placesArray) {
+        const listContainer = document.getElementById('places-list');
+        if (!placesArray.length) {
+            listContainer.innerHTML = '<div style="text-align:center; padding:20px;">❄️ Нет мест с таким фильтром</div>';
+            return;
+        }
+        
+        listContainer.innerHTML = '';
+        placesArray.forEach((place) => {
+            const typeLabel = { cafe: '☕ Кафе', mall: '🏬 ТЦ', bus: '🚏 Остановка', gov: '🏛️ Госучреждение' }[place.type];
+            
+            const div = document.createElement('div');
+            div.className = 'place-item';
+            div.innerHTML = `
+                <div class="place-name">🔥 ${place.name}</div>
+                <div class="place-address">📍 ${place.address}</div>
+                <div class="place-hours">🕒 ${place.hours}</div>
+                <div class="place-type type-${place.type}">${typeLabel}</div>
+                <div style="font-size:0.7rem; margin-top:5px; color:#7f8c8d;">${place.note}</div>
+            `;
+            div.addEventListener('click', () => {
+                map.flyTo([place.lat, place.lng], 16, { duration: 1.2 });
+                const found = markers.find(m => 
+                    Math.abs(m.marker.getLatLng().lat - place.lat) < 0.0001 && 
+                    Math.abs(m.marker.getLatLng().lng - place.lng) < 0.0001
+                );
+                if (found) found.marker.openPopup();
+            });
+            listContainer.appendChild(div);
+        });
+    }
+
+    let currentFilter = 'all';
+    
+    function applyFilter(type) {
+        if (places.length === 0) return;
+        currentFilter = type;
+        const filteredPlaces = showMarkersByType(type);
+        buildList(filteredPlaces);
+        
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            if (btn.dataset.type === type) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+    }
+
+    // Геокодирование: получение координат по адресу
+    async function geocodeAddress(address) {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`;
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            if (data && data.length > 0) {
+                return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            }
+        } catch (error) {
+            console.error(`Ошибка геокодирования для ${address}:`, error);
+        }
+        return null;
+    }
+
+    // Загрузка всех координат для мест
+    async function loadAllCoordinates() {
+        const listContainer = document.getElementById('places-list');
+        listContainer.innerHTML = '<div class="loading">🔍 Поиск точных координат мест (может занять 10-15 секунд)...</div>';
+        
+        let completed = 0;
+        const total = placesData.length;
+        
+        for (const place of placesData) {
+            const coords = await geocodeAddress(place.address);
+            if (coords) {
+                places.push({
+                    ...place,
+                    lat: coords.lat,
+                    lng: coords.lng
+                });
+            } else {
+                // Если не найдено, добавляем с приблизительными координатами центра Якутска
+                places.push({
+                    ...place,
+                    lat: 62.0281,
+                    lng: 129.7325
+                });
+                console.warn(`Не удалось найти координаты для: ${place.name} (${place.address})`);
+            }
+            completed++;
+            listContainer.innerHTML = `<div class="loading">📍 Загружено ${completed} из ${total} мест...</div>`;
+        }
+        
+        // Все координаты получены — показываем карту и маркеры
+        initMap();
+        applyFilter('all');
+        setTimeout(() => map.invalidateSize(), 100);
+    }
+
+    // Навешиваем обработчики фильтров после загрузки DOM
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (places.length > 0) applyFilter(btn.dataset.type);
+        });
+    });
+
+    // Запускаем загрузку координат
+    loadAllCoordinates();
+</script>
+</body>
+</html>
